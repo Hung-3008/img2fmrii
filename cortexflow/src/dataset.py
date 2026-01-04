@@ -18,10 +18,17 @@ class CortexDataset(Dataset):
         # Determine file names
         if mode == "train":
             fmri_file = "train_fmri_avg.npy"
-            clip_file = "train_clip_vitl14.npy" # Vit-L/14 embedding
+            # Prefer multilayer if exists
+            if os.path.exists(os.path.join(self.data_dir, "train_clip_multilayer.npy")):
+                clip_file = "train_clip_multilayer.npy"
+            else:
+                clip_file = "train_clip_vitl14.npy"
         else:
             fmri_file = "test_fmri_avg.npy"
-            clip_file = "test_clip_vitl14.npy"
+            if os.path.exists(os.path.join(self.data_dir, "test_clip_multilayer.npy")):
+                clip_file = "test_clip_multilayer.npy"
+            else:
+                clip_file = "test_clip_vitl14.npy"
             
         self.fmri_path = os.path.join(self.data_dir, fmri_file)
         self.clip_path = os.path.join(self.data_dir, clip_file)

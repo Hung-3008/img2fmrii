@@ -110,3 +110,5 @@ dmypy.json
 .pyre/
 checkpoints/
 /data/
+notes/
+wandb/

@@ -45,13 +45,35 @@ def main():
     f_stim = h5py.File(stim_path, 'r')
     stimuli = f_stim['imgBrick'] # Lazy load
     
+
     # Load CLIP model
     print(f"Loading CLIP ViT-L/14 on {args.device}...")
     model, preprocess = clip.load("ViT-L/14", device=args.device)
     model.eval()
     
+    # Hooks for intermediate layers
+    activations = {}
+    def get_activation(name):
+        def hook(model, input, output):
+            # output of resblock is [seq_len, batch, dim]
+            # we want [batch, seq_len, dim] -> take [:, 0, :] for CLS
+            # Actually standard CLIP implementation returns [seq_len, batch, dim]
+            # Check clip source code or verify at runtime. 
+            # PyTorch MultiheadAttention usually is [seq, batch, feature].
+            activations[name] = output
+        return hook
+
+    # Register hooks
+    # ViT-L/14 has 24 layers. Indices 0-23.
+    # We want layer 6 (index 5) and layer 12 (index 11) and maybe layer 18 (index 17).
+    # Let's align with suggestion: mid-level and high-level.
+    # Layers 6, 12, 18 seems good spacing.
+    model.visual.transformer.resblocks[5].register_forward_hook(get_activation('layer_6'))
+    model.visual.transformer.resblocks[11].register_forward_hook(get_activation('layer_12'))
+    model.visual.transformer.resblocks[17].register_forward_hook(get_activation('layer_18'))
+
     def extract_features(img_ids, mode_name):
-        print(f"Extracting features for {mode_name} ({len(img_ids)} images)...")
+        print(f"Extracting multi-layer features for {mode_name} ({len(img_ids)} images)...")
         features_list = []
         
         # Batch processing
@@ -60,33 +82,47 @@ def main():
             batch_images = []
             
             for idx in batch_ids:
-                # NSD images are (425, 425, 3), usually standard RGB
-                # HDF5 indexing
                 img_array = stimuli[idx]
                 img = Image.fromarray(img_array.astype('uint8'))
                 batch_images.append(preprocess(img))
             
-            # Stack and move to device
             batch_input = torch.stack(batch_images).to(args.device)
             
             with torch.no_grad():
-                # Encode image
-                image_features = model.encode_image(batch_input)
-                # Normalize (important for CLIP covariance)
-                image_features = image_features / image_features.norm(dim=1, keepdim=True)
+                # Encode final layer
+                final_features = model.encode_image(batch_input)
+                final_features = final_features / final_features.norm(dim=1, keepdim=True) # [B, 768]
                 
-            features_list.append(image_features.cpu().numpy())
+                # Get intermediate from hooks
+                # Output from hook is [Seq, B, Dim]. We permute to [B, Seq, Dim]
+                # And take index 0 (CLS)
+                
+                feats = []
+                for layer_name in ['layer_6', 'layer_12', 'layer_18']:
+                    act = activations[layer_name] # [Seq, B, Dim]
+                    cls_token = act.permute(1, 0, 2)[:, 0, :] # [B, Dim = 1024]
+                    # Normalize? 
+                    cls_token = cls_token / cls_token.norm(dim=1, keepdim=True)
+                    feats.append(cls_token.cpu())
+                    
+                final_features = final_features.cpu()
+                feats.append(final_features)
+                
+                # Concatenate all: [B, 1024+1024+1024+768] = [B, 3840]
+                combined = torch.cat(feats, dim=1)
+                
+            features_list.append(combined.numpy())
             
         return np.concatenate(features_list, axis=0)
 
     # Extract Train
     train_feats = extract_features(train_ids, "Train")
-    np.save(os.path.join(proc_dir, 'train_clip_vitl14.npy'), train_feats)
+    np.save(os.path.join(proc_dir, 'train_clip_multilayer.npy'), train_feats)
     print(f"Saved train features: {train_feats.shape}")
     
     # Extract Test
     test_feats = extract_features(test_ids, "Test")
-    np.save(os.path.join(proc_dir, 'test_clip_vitl14.npy'), test_feats)
+    np.save(os.path.join(proc_dir, 'test_clip_multilayer.npy'), test_feats)
     print(f"Saved test features: {test_feats.shape}")
     
     print("Done!")

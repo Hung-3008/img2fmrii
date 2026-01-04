@@ -182,11 +182,40 @@ def evaluate(args):
     
     # Prepare ground-truth in appropriate format
     if args.use_trials:
-        # Simulate 3-trial format by repeating averaged data
-        # In production, load actual 3-trial data here
-        test_fmri_avg = test_ds.fmri_data.numpy()  # [N, D]
-        test_fmri_3trial = test_fmri_avg[:, None, :].repeat(3, axis=1)  # [N, 3, D]
-        test_fmri_3trial = torch.from_numpy(test_fmri_3trial).float()
+        # Load actual 3-trial NSD test data
+        # Path format: data/NSD/nsd/{subject}/nsd_test_fmri_scale_sub{N}.npy
+        subject_num = args.subject.replace('subj', '').replace('0', '')  # 'subj01' -> '1'
+        nsd_test_path = os.path.join(
+            'data/NSD/nsd',
+            args.subject,
+            f'nsd_test_fmri_scale_sub{subject_num}.npy'
+        )
+        
+        if os.path.exists(nsd_test_path):
+            print(f"Loading 3-trial NSD data from: {nsd_test_path}")
+            test_fmri_3trial = np.load(nsd_test_path).astype(np.float32)
+            
+            # Verify shape
+            if len(test_fmri_3trial.shape) == 3:
+                # Already [N, 3, D] format
+                print(f"Loaded 3-trial data: {test_fmri_3trial.shape}")
+            elif len(test_fmri_3trial.shape) == 2:
+                # [N*3, D] format - reshape to [N, 3, D]
+                N_total, D = test_fmri_3trial.shape
+                assert N_total % 3 == 0, f"Data shape {test_fmri_3trial.shape} not divisible by 3"
+                test_fmri_3trial = test_fmri_3trial.reshape(-1, 3, D)
+                print(f"Reshaped to: {test_fmri_3trial.shape}")
+            else:
+                raise ValueError(f"Unexpected data shape: {test_fmri_3trial.shape}")
+            
+            test_fmri_3trial = torch.from_numpy(test_fmri_3trial).float()
+        else:
+            print(f"WARNING: 3-trial NSD data not found at {nsd_test_path}")
+            print("Falling back to simulated 3-trial (repeating averaged data)")
+            test_fmri_avg = test_ds.fmri_data.numpy()  # [N, D]
+            test_fmri_3trial = test_fmri_avg[:, None, :].repeat(3, axis=1)  # [N, 3, D]
+            test_fmri_3trial = torch.from_numpy(test_fmri_3trial).float()
+        
         print(f"Test fMRI (3-trial): {test_fmri_3trial.shape}")
     
     # Load Model
