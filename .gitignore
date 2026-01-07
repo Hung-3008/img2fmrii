@@ -112,3 +112,4 @@ checkpoints/
 /data/
 notes/
 wandb/
+outputs/
