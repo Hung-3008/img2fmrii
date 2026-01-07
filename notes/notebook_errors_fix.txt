@@ -1,3 +1,0 @@
-rm -rf /home/hung/.config/Antigravity/Service\ Worker
-rm -rf /home/hung/.config/Antigravity/GPUCache
-rm -rf /home/hung/.config/Antigravity/Cache*
