@@ -1,0 +1,51 @@
+
+# synfmri
+
+## Environment Setup
+
+1. **Install Anaconda/Miniconda** (if not already installed):  
+	Download from [https://docs.conda.io/en/latest/miniconda.html](https://docs.conda.io/en/latest/miniconda.html)
+
+2. **Create and activate the environment:**
+	```bash
+	conda env create -f requirements.yml
+	conda activate BrainVL
+	```
+
+## Download Data
+
+- Follow the instructions or run the provided scripts to download the required datasets.
+- If there is a script like `download_data.sh`, run:
+  ```bash
+  bash download_data.sh
+  ```
+- Make sure the data is placed in the correct folders as expected by the code.
+
+## Feature Extraction
+
+1. **Extract CLIP features:**
+	```bash
+	python cortexflow/data/extract_clip_features.py
+	```
+
+2. **Prepare NSD data for CortexFlow:**
+	```bash
+	python cortexflow/data/prepare_nsd_cortexflow.py
+	```
+
+## Model Training
+
+1. **Train the autoencoder:**
+	```bash
+	python cortexflow/src/train_ae.py
+	```
+
+2. **Train the latent model (V2):**
+	```bash
+	python cortexflow/src/train_latent_v2.py
+	```
+
+## Notes
+
+- Make sure all paths in the scripts match your data locations.
+- For more details on each script, check the comments and documentation inside the respective Python files.
